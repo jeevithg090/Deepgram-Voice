@@ -1,0 +1,21 @@
+# Environments
+venv/
+.env
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Mac
+.DS_Store
+
+# Large model files (optional, but typically you don't push 60MB files unless using LFS)
+# If you want to push the .onnx files, remove the next line.
+# *.onnx
+
+# Ignore output wav
+out.wav
+spacewalk.wav
+DeepGram.zip
