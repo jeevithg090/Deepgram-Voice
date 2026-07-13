@@ -12,14 +12,20 @@
     <div class="app-container">
         <header>
             <h1>Voice AI Agent</h1>
-            <div class="settings">
-                <div class="mode-toggle">
-                    <button id="mode-batch" class="mode-btn active">Batch Processing</button>
-                    <button id="mode-stream" class="mode-btn">Streaming</button>
-                    <button id="mode-stream-llm" class="mode-btn">Streaming LLM</button>
+            <div class="settings" style="flex-direction: column; align-items: flex-end; gap: 10px;">
+                <div style="display: flex; gap: 15px; align-items: center;">
+                    <a href="report.html" style="background-color: var(--accent-color); color: var(--bg-color); text-decoration: none; padding: 6px 12px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 5px; white-space: nowrap;" title="Benchmark Report">
+                        <i class="fas fa-chart-line"></i> View Report
+                    </a>
+                    <div class="mode-toggle">
+                        <button id="mode-batch" class="mode-btn active">Batch Processing</button>
+                        <button id="mode-stream" class="mode-btn">Streaming</button>
+                        <button id="mode-stream-llm" class="mode-btn">Streaming LLM</button>
+                    </div>
                 </div>
-                <label for="language-select">Language:</label>
-                <select id="language-select">
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <label for="language-select">Language:</label>
+                    <select id="language-select">
                     <option value="auto">Auto-detect (All)</option>
                     <option value="en">English (en)</option>
                     <option value="hi">Hindi (hi)</option>
@@ -32,6 +38,7 @@
                     <option value="bn">Bengali (bn)</option>
                     <option value="pa">Punjabi (pa)</option>
                 </select>
+                </div>
             </div>
         </header>
         

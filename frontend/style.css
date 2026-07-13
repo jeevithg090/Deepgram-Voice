@@ -29,7 +29,7 @@ body {
 
 .app-container {
     width: 100%;
-    max-width: 600px;
+    max-width: 1000px;
     height: 90vh;
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
@@ -55,6 +55,7 @@ header h1 {
     font-size: 1.2rem;
     font-weight: 600;
     letter-spacing: -0.5px;
+    white-space: nowrap;
 }
 
 .settings {
@@ -80,6 +81,7 @@ header h1 {
     font-size: 0.75rem;
     cursor: pointer;
     transition: all 0.2s ease;
+    white-space: nowrap;
 }
 
 .mode-btn.active {

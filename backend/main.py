@@ -6,7 +6,10 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from deepgram_service import transcribe_audio, synthesize_audio, stream_transcription, stream_synthesis
 from knowledge_base import kb
-from llm_service import generate_response, generate_response_groq
+from llm_service import generate_response, generate_response_openai, generate_response_openai_stream
+from pydantic import BaseModel
+from typing import List
+import time
 
 app = FastAPI(title="Voice AI Agent")
 
@@ -29,7 +32,7 @@ async def chat(audio: UploadFile = File(...), language: str = Form(...), use_llm
     
     context = kb.search(user_transcript, top_k=2)
     if use_llm:
-        agent_text = generate_response_groq(user_transcript, context, language)
+        agent_text = generate_response_openai(user_transcript, context, language)
     else:
         agent_text = generate_response(user_transcript, context, language)
         
@@ -61,11 +64,11 @@ async def websocket_chat(websocket: WebSocket):
         use_llm = False
         
     async def sentence_generator(transcript: str, retrieved_context: str, language: str):
-        from llm_service import generate_response_groq_stream
+        from llm_service import generate_response_openai_stream
         import re
         buffer = ""
         full_text = ""
-        async for token in generate_response_groq_stream(transcript, retrieved_context, language):
+        async for token in generate_response_openai_stream(transcript, retrieved_context, language):
             buffer += token
             full_text += token
             
@@ -125,6 +128,51 @@ async def websocket_chat(websocket: WebSocket):
         await stream_transcription(websocket, language, encoding, sample_rate, process_final_transcript)
     except WebSocketDisconnect:
         print("Client disconnected")
+
+class BenchmarkRequest(BaseModel):
+    api_key: str
+    models: List[str]
+    prompt: str
+
+@app.post("/benchmark_stream")
+async def benchmark_stream(req: BenchmarkRequest):
+    results = []
+    retrieved_context = "This is a test context for benchmarking."
+    language = "en"
+    
+    for model in req.models:
+        start_time = time.time()
+        ttft = None
+        token_count = 0
+        
+        try:
+            async for token in generate_response_openai_stream(req.prompt, retrieved_context, language, model=model, api_key=req.api_key):
+                if ttft is None and token.strip():
+                    ttft = time.time() - start_time
+                token_count += 1
+            
+            end_time = time.time()
+            total_time = end_time - start_time
+            tps = token_count / total_time if total_time > 0 else 0
+            
+            results.append({
+                "model": model,
+                "ttft": ttft if ttft is not None else 0,
+                "tps": tps,
+                "total_time": total_time,
+                "error": None
+            })
+        except Exception as e:
+            results.append({
+                "model": model,
+                "ttft": 0,
+                "tps": 0,
+                "total_time": 0,
+                "error": str(e)
+            })
+            
+    results.sort(key=lambda x: x["tps"], reverse=True)
+    return JSONResponse(results)
 
 # Mount the frontend directory
 app.mount("/", StaticFiles(directory="../frontend", html=True), name="frontend")
