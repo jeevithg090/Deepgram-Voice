@@ -1,63 +1,111 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voice AI Agent</title>
-    <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-</head>
-<body>
-    <div class="app-container">
-        <header>
-            <h1>Voice AI Agent</h1>
-            <div class="settings" style="flex-direction: column; align-items: flex-end; gap: 10px;">
-                <div style="display: flex; gap: 15px; align-items: center;">
-                    <a href="report.html" style="background-color: var(--accent-color); color: var(--bg-color); text-decoration: none; padding: 6px 12px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 5px; white-space: nowrap;" title="Benchmark Report">
-                        <i class="fas fa-chart-line"></i> View Report
-                    </a>
-                    <div class="mode-toggle">
-                        <button id="mode-batch" class="mode-btn active">Batch Processing</button>
-                        <button id="mode-stream" class="mode-btn">Streaming</button>
-                        <button id="mode-stream-llm" class="mode-btn">Streaming LLM</button>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Voice AI Agent</title>
+        <meta
+            name="description"
+            content="Talk to a real-time voice AI customer-support agent: Deepgram speech-to-text, retrieval-augmented answers and local Piper text-to-speech."
+        />
+        <meta name="theme-color" content="#000000" />
+        <meta name="color-scheme" content="dark" />
+        <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet" />
+        <link rel="stylesheet" href="style.css" />
+    </head>
+    <body>
+        <div class="app-container">
+            <header class="app-header">
+                <h1>Voice AI Agent</h1>
+                <div class="settings">
+                    <div class="settings-row">
+                        <a class="link-btn" href="report.html">
+                            <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14">
+                                <path
+                                    fill="currentColor"
+                                    d="M3 3h2v16h16v2H3zm4 12 4-5 3 3 5-7 1.6 1.2-6.4 9-3-3-2.6 3.3z"
+                                />
+                            </svg>
+                            Benchmark
+                        </a>
+                        <div class="mode-toggle" role="group" aria-label="Processing mode">
+                            <button
+                                type="button"
+                                class="mode-btn active"
+                                data-mode="batch"
+                                aria-pressed="true"
+                                title="Record, then send the whole clip"
+                            >
+                                Batch
+                            </button>
+                            <button
+                                type="button"
+                                class="mode-btn"
+                                data-mode="stream"
+                                aria-pressed="false"
+                                title="Stream audio to Deepgram while you speak"
+                            >
+                                Streaming
+                            </button>
+                            <button
+                                type="button"
+                                class="mode-btn"
+                                data-mode="stream_llm"
+                                aria-pressed="false"
+                                title="Stream audio in and speak the LLM answer sentence by sentence"
+                            >
+                                Streaming LLM
+                            </button>
+                        </div>
+                    </div>
+                    <div class="settings-row">
+                        <label for="language-select">Language</label>
+                        <select id="language-select">
+                            <option value="auto">Auto-detect (batch only)</option>
+                            <option value="en" selected>English (en)</option>
+                            <option value="hi">Hindi (hi)</option>
+                            <option value="mr">Marathi (mr)</option>
+                            <option value="ta">Tamil (ta)</option>
+                            <option value="te">Telugu (te)</option>
+                            <option value="kn">Kannada (kn)</option>
+                            <option value="ml">Malayalam (ml)</option>
+                            <option value="gu">Gujarati (gu)</option>
+                            <option value="bn">Bengali (bn)</option>
+                            <option value="pa">Punjabi (pa)</option>
+                        </select>
                     </div>
                 </div>
-                <div style="display: flex; gap: 8px; align-items: center;">
-                    <label for="language-select">Language:</label>
-                    <select id="language-select">
-                    <option value="auto">Auto-detect (All)</option>
-                    <option value="en">English (en)</option>
-                    <option value="hi">Hindi (hi)</option>
-                    <option value="mr">Marathi (mr)</option>
-                    <option value="ta">Tamil (ta)</option>
-                    <option value="te">Telugu (te)</option>
-                    <option value="kn">Kannada (kn)</option>
-                    <option value="ml">Malayalam (ml)</option>
-                    <option value="gu">Gujarati (gu)</option>
-                    <option value="bn">Bengali (bn)</option>
-                    <option value="pa">Punjabi (pa)</option>
-                </select>
+            </header>
+
+            <main class="chat-interface" id="chat-scroll">
+                <div id="chat-box" class="chat-box" role="log" aria-live="polite" aria-label="Conversation">
+                    <div class="message ai-message">
+                        <div class="bubble">
+                            Hello! I'm the MockStore assistant. Ask me about shipping, returns, payments or orders.
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </header>
-        
-        <main class="chat-interface">
-            <div id="chat-box" class="chat-box">
-                <div class="message ai-message">
-                    <div class="bubble">Hello! I am your AI assistant. How can I help you today?</div>
-                </div>
-            </div>
-        </main>
-        
-        <div class="controls">
-            <button id="record-btn" class="record-btn">
-                <i class="fas fa-microphone"></i>
-                <span>Press & Hold to Speak</span>
-            </button>
-            <div id="status" class="status-indicator">Ready</div>
+            </main>
+
+            <footer class="controls">
+                <button id="record-btn" class="record-btn" type="button" aria-describedby="record-hint">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20">
+                        <path
+                            fill="currentColor"
+                            d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z"
+                        />
+                    </svg>
+                    <span class="record-label">Hold to speak</span>
+                </button>
+                <p id="record-hint" class="hint">
+                    Press and hold the button (or hold Space / Enter while it is focused), then release to send.
+                </p>
+                <div id="status" class="status-indicator" role="status" aria-live="polite">Ready</div>
+            </footer>
         </div>
-    </div>
-    <script src="app.js?v=2"></script>
-</body>
+        <script src="app.js" defer></script>
+    </body>
 </html>
