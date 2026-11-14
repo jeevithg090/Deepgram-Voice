@@ -1,67 +1,75 @@
+"""Manual end-to-end latency check of the streaming ``/ws/chat`` endpoint.
+
+Requires a running server with ``DEEPGRAM_API_KEY`` configured (and
+``OPENAI_API_KEY`` for ``--use-llm``).
+
+    python scripts/smoke_stream.py path/to/audio.wav [--url ws://localhost:8000] [--use-llm]
+"""
+
+from __future__ import annotations
+
+import argparse
 import asyncio
-import websockets
 import json
+import sys
 import time
+from pathlib import Path
 
-async def run_test():
-    with open("spacewalk.wav", "rb") as f:
-        audio_data = f.read()
+import websockets
 
-    url = "ws://localhost:8000/ws/chat"
-    
-    async with websockets.connect(url) as ws:
-        print("--- Testing Streaming Latency ---")
-        
-        # 1. Send configuration
-        config = {
-            "language": "en",
-            "use_llm": True
-        }
-        await ws.send(json.dumps(config))
-        print("Sent config.")
-        
-        # 2. Start sender and receiver concurrently
-        
-        async def sender():
-            chunk_size = 4096
-            for i in range(0, len(audio_data), chunk_size):
-                await ws.send(audio_data[i:i+chunk_size])
+CHUNK_SIZE = 4096
+
+
+async def run(audio: bytes, url: str, language: str, use_llm: bool) -> int:
+    async with websockets.connect(f"{url}/ws/chat", max_size=None) as ws:
+        await ws.send(json.dumps({"language": language, "use_llm": use_llm}))
+        start = time.perf_counter()
+
+        async def sender() -> None:
+            for i in range(0, len(audio), CHUNK_SIZE):
+                await ws.send(audio[i : i + CHUNK_SIZE])
                 await asyncio.sleep(0.01)
-            
-            print("Finished sending audio. Waiting for AI response...")
-            await ws.send(b"") # Close the stream
-            
-        async def receiver():
-            stt_end_time = None
-            first_byte_time = None
-            total_audio_received = 0
-            
-            try:
-                while True:
-                    msg = await ws.recv()
-                    if isinstance(msg, str):
-                        data = json.loads(msg)
-                        if data.get("type") == "transcript":
-                            if data['speaker'] == 'user':
-                                stt_end_time = time.time()
-                            print(f"[{data['speaker']}] {data['text']}")
-                        elif data.get("type") == "audio_start":
-                            first_byte_time = time.time()
-                            if stt_end_time:
-                                ttfb = first_byte_time - stt_end_time
-                                print(f"--> LLM+TTS Latency (STT End to First Byte): {ttfb*1000:.2f} ms <--")
-                            else:
-                                print(f"--> TTFB (Time to First Byte, total): {(first_byte_time - start_time)*1000:.2f} ms <--")
-                        elif data.get("type") == "audio_end":
-                            print(f"Audio stream finished. Total TTS bytes: {total_audio_received}")
-                            break
-                    else:
-                        total_audio_received += len(msg)
-            except websockets.exceptions.ConnectionClosed:
-                print("Connection closed.")
-                
-        start_time = time.time()
-        await asyncio.gather(sender(), receiver())
+            await ws.send(b"")  # end of audio
+            print("Finished sending audio, waiting for the agent...")
+
+        async def receiver() -> int:
+            stt_done: float | None = None
+            audio_bytes = 0
+            async for message in ws:
+                if isinstance(message, bytes):
+                    if audio_bytes == 0 and stt_done is not None:
+                        ttfb = (time.perf_counter() - stt_done) * 1000
+                        print(f"--> transcript to first audio byte: {ttfb:.0f} ms")
+                    audio_bytes += len(message)
+                    continue
+                event = json.loads(message)
+                kind = event.get("type")
+                if kind == "transcript":
+                    if event["speaker"] == "user":
+                        stt_done = time.perf_counter()
+                    print(f"[{event['speaker']}] {event['text']}")
+                elif kind == "error":
+                    print(f"Error: {event['message']}")
+                    return 1
+                elif kind == "audio_end":
+                    total = time.perf_counter() - start
+                    print(f"Received {audio_bytes} audio bytes; total {total:.2f}s")
+                    return 0
+            return 1
+
+        _, code = await asyncio.gather(sender(), receiver())
+        return code
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("audio", type=Path)
+    parser.add_argument("--url", default="ws://localhost:8000")
+    parser.add_argument("--language", default="en")
+    parser.add_argument("--use-llm", action="store_true")
+    args = parser.parse_args()
+    return asyncio.run(run(args.audio.read_bytes(), args.url, args.language, args.use_llm))
+
 
 if __name__ == "__main__":
-    asyncio.run(run_test())
+    sys.exit(main())
