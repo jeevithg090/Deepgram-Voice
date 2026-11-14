@@ -1,93 +1,111 @@
+'use strict';
+
+const STORAGE_KEY = 'openai_api_key';
+const DEFAULT_PROMPT = 'Explain the history of artificial intelligence in 3 paragraphs.';
+
+function safeStorage(action) {
+    try {
+        return action(window.localStorage);
+    } catch (_) {
+        return null; // storage may be unavailable (private mode, blocked cookies)
+    }
+}
+
+function cell(text, className) {
+    const td = document.createElement('td');
+    td.textContent = text;
+    if (className) td.className = className;
+    return td;
+}
+
+function renderResults(tbody, results) {
+    tbody.replaceChildren();
+    let rank = 0;
+    results.forEach((result) => {
+        const tr = document.createElement('tr');
+        if (result.error) {
+            tr.append(cell('–'), cell(result.model));
+            const err = cell(`Error: ${result.error}`, 'error-cell');
+            err.colSpan = 3;
+            tr.append(err);
+        } else {
+            rank += 1;
+            tr.append(
+                cell(`#${rank}`, rank <= 3 ? `rank-${rank}` : ''),
+                cell(result.model),
+                cell(result.ttft.toFixed(3)),
+                cell(result.tps.toFixed(2)),
+                cell(result.total_time.toFixed(2)),
+            );
+        }
+        tbody.appendChild(tr);
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('benchmark-form');
     const runBtn = document.getElementById('run-benchmark-btn');
-    const statusIndicator = document.getElementById('status-indicator');
+    const apiKeyInput = document.getElementById('api-key');
+    const rememberKey = document.getElementById('remember-key');
+    const promptInput = document.getElementById('test-prompt');
+    const statusEl = document.getElementById('status-indicator');
     const resultsSection = document.getElementById('results-section');
-    const resultsTableBody = document.querySelector('#results-table tbody');
-    
-    // Check if key is saved in localStorage
-    const savedKey = localStorage.getItem('openai_api_key');
+    const tbody = document.querySelector('#results-table tbody');
+
+    const savedKey = safeStorage((s) => s.getItem(STORAGE_KEY));
     if (savedKey) {
-        document.getElementById('api-key').value = savedKey;
+        apiKeyInput.value = savedKey;
+        rememberKey.checked = true;
     }
 
-    runBtn.addEventListener('click', async () => {
-        const apiKey = document.getElementById('api-key').value.trim();
-        const testPrompt = document.getElementById('test-prompt').value.trim();
-        
-        if (!apiKey) {
-            alert('Please enter an OpenAI API Key.');
+    const setStatus = (text, isError = false) => {
+        statusEl.textContent = text;
+        statusEl.classList.toggle('error', isError);
+    };
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const apiKey = apiKeyInput.value.trim();
+        const models = Array.from(form.querySelectorAll('input[name="model"]:checked')).map((cb) => cb.value);
+
+        if (models.length === 0) {
+            setStatus('Select at least one model to test.', true);
             return;
         }
-        
-        // Save key for convenience
-        localStorage.setItem('openai_api_key', apiKey);
-        
-        const checkboxes = document.querySelectorAll('.models-grid input[type="checkbox"]:checked');
-        const selectedModels = Array.from(checkboxes).map(cb => cb.value);
-        
-        if (selectedModels.length === 0) {
-            alert('Please select at least one model to test.');
-            return;
-        }
-        
+
+        safeStorage((s) =>
+            rememberKey.checked && apiKey ? s.setItem(STORAGE_KEY, apiKey) : s.removeItem(STORAGE_KEY),
+        );
+
         runBtn.disabled = true;
-        statusIndicator.style.display = 'block';
-        resultsSection.style.display = 'none';
-        resultsTableBody.innerHTML = '';
-        
+        form.setAttribute('aria-busy', 'true');
+        setStatus(`Running benchmark across ${models.length} model(s)… this can take a while.`);
+
         try {
             const response = await fetch('/benchmark_stream', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    api_key: apiKey,
-                    models: selectedModels,
-                    prompt: testPrompt || "Explain the history of artificial intelligence in 3 paragraphs."
-                })
+                    api_key: apiKey || null,
+                    models,
+                    prompt: promptInput.value.trim() || DEFAULT_PROMPT,
+                }),
             });
-            
+            const body = await response.json().catch(() => null);
             if (!response.ok) {
-                throw new Error('Server returned ' + response.status);
+                const message =
+                    body && typeof body.error === 'string' ? body.error : `Server returned ${response.status}`;
+                throw new Error(message);
             }
-            
-            const results = await response.json();
-            
-            results.forEach((result, index) => {
-                const tr = document.createElement('tr');
-                let rankClass = '';
-                if (index === 0) rankClass = 'rank-1';
-                else if (index === 1) rankClass = 'rank-2';
-                else if (index === 2) rankClass = 'rank-3';
-                
-                if (result.error) {
-                    tr.innerHTML = `
-                        <td>-</td>
-                        <td>${result.model}</td>
-                        <td colspan="3" style="color: #ff3333;">Error: ${result.error}</td>
-                    `;
-                } else {
-                    tr.innerHTML = `
-                        <td class="${rankClass}">#${index + 1}</td>
-                        <td>${result.model}</td>
-                        <td>${result.ttft.toFixed(3)}</td>
-                        <td>${result.tps.toFixed(2)}</td>
-                        <td>${result.total_time.toFixed(2)}</td>
-                    `;
-                }
-                
-                resultsTableBody.appendChild(tr);
-            });
-            
-            resultsSection.style.display = 'block';
-            
-        } catch (error) {
-            console.error("Benchmark Error:", error);
-            alert("An error occurred while running the benchmark: " + error.message);
+            renderResults(tbody, body || []);
+            resultsSection.hidden = false;
+            setStatus('Benchmark complete.');
+        } catch (err) {
+            console.error('Benchmark error:', err);
+            setStatus(`Benchmark failed: ${err.message}`, true);
         } finally {
             runBtn.disabled = false;
-            statusIndicator.style.display = 'none';
+            form.removeAttribute('aria-busy');
         }
     });
 });
