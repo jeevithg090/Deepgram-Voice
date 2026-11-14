@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "polish/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (lint + tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements-dev.txt
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: Tests
+        run: pytest -v
+
+      - name: Import / startup smoke test
+        working-directory: backend
+        run: |
+          python -c "from app.main import create_app; from app.knowledge_base import KnowledgeBase; \
+          app = create_app(knowledge_base=KnowledgeBase(['x'], lambda: (lambda t: [[1.0] for _ in t])), warm_up=False); \
+          print(sorted(r.path for r in app.routes))"
+
+  frontend:
+    name: Frontend (lint + format)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Prettier
+        run: npm run format:check
