@@ -43,6 +43,20 @@ def test_frontend_is_served(client):
     assert "<title>t</title>" in client.get("/").text
 
 
+def test_bundled_frontend_pages_and_not_found(settings, kb, fake_tts):
+    from app.config import PROJECT_ROOT
+
+    app = create_app(
+        replace(settings, frontend_dir=PROJECT_ROOT / "frontend"), kb, fake_tts, warm_up=False
+    )
+    with TestClient(app) as test_client:
+        for path in ("/", "/report.html", "/style.css", "/theme.js", "/favicon.svg"):
+            assert test_client.get(path).status_code == 200, path
+        missing = test_client.get("/no-such-page")
+        assert missing.status_code == 404
+        assert "Page not found" in missing.text
+
+
 def test_batch_chat_returns_audio_and_transcripts(client, fake_stt, fake_tts):
     response = client.post(
         "/chat",
