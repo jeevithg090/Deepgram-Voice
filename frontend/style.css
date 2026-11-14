@@ -540,7 +540,7 @@ kbd {
 
 .segment {
     flex: 1;
-    min-height: 38px;
+    min-height: 40px;
     padding: 0 var(--space-4);
     border: none;
     border-radius: var(--radius-sm);
