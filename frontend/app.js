@@ -94,14 +94,31 @@ class PcmStreamPlayer {
     }
 }
 
+const MODE_DESCRIPTIONS = {
+    batch: 'Records your whole question, then sends it in one request.',
+    stream: 'Streams your voice to Deepgram while you speak, then reads the answer aloud.',
+    stream_llm: 'Streams your voice in and speaks the OpenAI answer sentence by sentence as it is written.',
+};
+
+const AGENT_ICON =
+    '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z"/></svg>';
+
+const IDLE_LABEL = 'Hold to speak';
+const RECORDING_LABEL = 'Listening… release to send';
+
 document.addEventListener('DOMContentLoaded', () => {
     const recordBtn = document.getElementById('record-btn');
-    const recordLabel = recordBtn.querySelector('.record-label');
+    const recordLabel = document.querySelector('.record-label');
     const statusEl = document.getElementById('status');
+    const statusText = statusEl.querySelector('.status-text');
     const chatBox = document.getElementById('chat-box');
     const chatScroll = document.getElementById('chat-scroll');
+    const emptyState = document.getElementById('empty-state');
+    const clearBtn = document.getElementById('clear-btn');
+    const noticeEl = document.getElementById('notice');
     const languageSelect = document.getElementById('language-select');
-    const modeButtons = Array.from(document.querySelectorAll('.mode-btn'));
+    const modeDescription = document.getElementById('mode-description');
+    const modeButtons = Array.from(document.querySelectorAll('.segment[data-mode]'));
 
     const state = {
         mode: 'batch',
@@ -116,11 +133,19 @@ document.addEventListener('DOMContentLoaded', () => {
         audioCtx: null,
         player: null,
         htmlAudio: null,
+        status: 'idle',
+        typingEl: null,
     };
 
-    const setStatus = (text, isError = false) => {
-        statusEl.textContent = text;
-        statusEl.classList.toggle('error', isError);
+    /**
+     * Update the status pill.
+     * @param {string} text
+     * @param {'idle'|'listening'|'busy'|'speaking'|'success'|'error'} [kind]
+     */
+    const setStatus = (text, kind = 'idle') => {
+        statusText.textContent = text;
+        statusEl.dataset.state = kind;
+        state.status = kind;
     };
 
     const setBusy = (busy) => {
@@ -131,18 +156,89 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.disabled = busy;
         });
         languageSelect.disabled = busy;
+        clearBtn.disabled = busy;
     };
 
-    function addMessage(text, sender) {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${sender}-message`;
+    const scrollToBottom = () => {
+        chatScroll.scrollTop = chatScroll.scrollHeight;
+    };
+
+    function buildMessage(sender) {
+        const isUser = sender === 'user';
+        const wrapper = document.createElement('div');
+        wrapper.className = `message ${isUser ? 'message-user' : 'message-agent'}`;
+
+        const avatar = document.createElement('div');
+        avatar.className = 'avatar';
+        avatar.setAttribute('aria-hidden', 'true');
+        avatar.innerHTML = AGENT_ICON; // static SVG markup
+
+        const body = document.createElement('div');
+        body.className = 'message-body';
         const bubble = document.createElement('div');
         bubble.className = 'bubble';
+        const speaker = document.createElement('span');
+        speaker.className = 'visually-hidden';
+        speaker.textContent = isUser ? 'You said: ' : 'Agent: ';
+        const content = document.createElement('span');
+        bubble.append(speaker, content);
+        body.append(bubble);
+        wrapper.append(avatar, body);
+        return { wrapper, bubble: content };
+    }
+
+    function hideEmptyState() {
+        emptyState.hidden = true;
+        clearBtn.hidden = false;
+    }
+
+    function addMessage(text, sender) {
+        removeTyping();
+        hideEmptyState();
+        const { wrapper, bubble } = buildMessage(sender);
         bubble.textContent = text;
-        messageDiv.appendChild(bubble);
-        chatBox.appendChild(messageDiv);
-        chatScroll.scrollTop = chatScroll.scrollHeight;
+        chatBox.appendChild(wrapper);
+        scrollToBottom();
         return bubble;
+    }
+
+    /** Show an animated "agent is thinking" bubble until the answer arrives. */
+    function showTyping() {
+        if (state.typingEl) return;
+        hideEmptyState();
+        const { wrapper, bubble } = buildMessage('ai');
+        wrapper.classList.add('message-typing');
+        wrapper.setAttribute('aria-hidden', 'true');
+        const dots = document.createElement('span');
+        dots.className = 'typing';
+        dots.append(document.createElement('span'), document.createElement('span'), document.createElement('span'));
+        bubble.appendChild(dots);
+        chatBox.appendChild(wrapper);
+        state.typingEl = wrapper;
+        scrollToBottom();
+    }
+
+    function removeTyping() {
+        if (state.typingEl) {
+            state.typingEl.remove();
+            state.typingEl = null;
+        }
+    }
+
+    function clearConversation() {
+        stopPlayback();
+        removeTyping();
+        chatBox.querySelectorAll('.message').forEach((node) => node.remove());
+        emptyState.hidden = false;
+        clearBtn.hidden = true;
+        setStatus('Ready');
+        recordBtn.focus();
+    }
+
+    function showNotice(html, tone) {
+        noticeEl.innerHTML = `<span>${html}</span>`; // static, trusted strings only
+        noticeEl.dataset.tone = tone;
+        noticeEl.hidden = false;
     }
 
     function stopPlayback() {
@@ -153,16 +249,50 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function playBlob(blob) {
+    function playBlob(blob, onEnded) {
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
         state.htmlAudio = audio;
-        audio.addEventListener('ended', () => URL.revokeObjectURL(url), { once: true });
+        audio.addEventListener(
+            'ended',
+            () => {
+                URL.revokeObjectURL(url);
+                if (onEnded) onEnded();
+            },
+            { once: true },
+        );
         audio.play().catch((err) => {
-            console.error('Playback failed:', err);
-            setStatus('Could not play the audio response.', true);
+            console.warn('Playback failed:', err);
+            setStatus('Could not play the audio reply. Check your sound settings.', 'error');
         });
     }
+
+    // ---- server health ----------------------------------------------------
+    async function checkHealth() {
+        try {
+            const response = await fetch('/health', { cache: 'no-store' });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const health = await response.json();
+            const providers = health.providers || {};
+            if (!providers.deepgram) {
+                showNotice(
+                    '<strong>Speech-to-text is not configured.</strong> Set <code>DEEPGRAM_API_KEY</code> on the server and restart it, otherwise requests will fail.',
+                    'warning',
+                );
+            } else if (!providers.openai && !providers.gemini) {
+                showNotice(
+                    '<strong>Offline answers.</strong> No OpenAI or Gemini key is configured, so the agent replies with the closest FAQ entry.',
+                    'info',
+                );
+            }
+        } catch (err) {
+            showNotice(
+                '<strong>Cannot reach the server.</strong> Make sure the backend is running, then reload the page.',
+                'danger',
+            );
+        }
+    }
+    checkHealth();
 
     // ---- mode selection ---------------------------------------------------
     modeButtons.forEach((btn) => {
@@ -173,14 +303,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 other.classList.toggle('active', active);
                 other.setAttribute('aria-pressed', String(active));
             });
+            modeDescription.textContent = MODE_DESCRIPTIONS[state.mode] || '';
         });
     });
+
+    clearBtn.addEventListener('click', clearConversation);
 
     // ---- microphone -------------------------------------------------------
     async function ensureMicrophone() {
         if (state.micStream) return true;
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
-            setStatus('This browser does not support audio recording.', true);
+            setStatus('This browser cannot record audio. Try a recent Chrome, Edge, Firefox or Safari.', 'error');
             return false;
         }
         try {
@@ -188,8 +321,8 @@ document.addEventListener('DOMContentLoaded', () => {
             state.mimeType = pickMimeType();
             return true;
         } catch (err) {
-            console.error('Microphone access denied:', err);
-            setStatus('Microphone access is required. Allow it in your browser settings.', true);
+            console.warn('Microphone access denied:', err);
+            setStatus('Microphone access was blocked. Allow it in your browser settings and try again.', 'error');
             return false;
         }
     }
@@ -217,18 +350,21 @@ document.addEventListener('DOMContentLoaded', () => {
         return state.audioCtx;
     }
 
+    const elapsed = () => ((performance.now() - state.startTime) / 1000).toFixed(2);
+
     // ---- batch ------------------------------------------------------------
     async function sendBatch() {
         const type = state.mimeType || 'audio/webm';
         const blob = new Blob(state.chunks, { type });
         state.chunks = [];
         if (blob.size === 0) {
-            setStatus('No audio captured. Hold the button a little longer.', true);
+            setStatus('No audio was captured. Hold the button a little longer.', 'error');
             return;
         }
 
         setBusy(true);
-        setStatus('Processing…');
+        setStatus('Transcribing and thinking…', 'busy');
+        showTyping();
         const ext = type.includes('mp4') ? 'm4a' : type.includes('ogg') ? 'ogg' : 'webm';
         const formData = new FormData();
         formData.append('audio', blob, `recording.${ext}`);
@@ -238,7 +374,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('/chat', { method: 'POST', body: formData });
             if (!response.ok) {
                 const body = await response.json().catch(() => ({}));
-                throw new Error(body.error || `Server returned ${response.status}`);
+                throw new Error(body.error || `The server returned an error (${response.status}).`);
             }
             const userText = hexToString(response.headers.get('X-User-Transcript'));
             const agentText = hexToString(response.headers.get('X-Agent-Transcript'));
@@ -246,12 +382,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (agentText) addMessage(agentText, 'ai');
 
             const audioBlob = await response.blob();
-            const latency = ((performance.now() - state.startTime) / 1000).toFixed(2);
-            setStatus(`Batch round trip: ${latency}s`);
+            const latency = elapsed();
+            setStatus(`Answered in ${latency}s`, 'success');
             playBlob(audioBlob);
         } catch (err) {
-            console.error('Batch request failed:', err);
-            setStatus(err.message || 'Error processing audio.', true);
+            console.warn('Batch request failed:', err);
+            removeTyping();
+            const offline = err instanceof TypeError;
+            setStatus(offline ? 'Network error. Is the server running?' : err.message, 'error');
         } finally {
             setBusy(false);
         }
@@ -270,13 +408,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const fallbackChunks = [];
         let agentBubble = null;
         let finished = false;
+        let cancelled = false;
         let firstAudio = true;
 
         ws.addEventListener('open', () => {
             if (!state.recording) {
                 // Released before the socket opened.
+                cancelled = true;
                 ws.close();
-                setStatus('Cancelled.');
+                setStatus('Cancelled. Hold the button a little longer.');
                 return;
             }
             ws.send(JSON.stringify({ language: languageSelect.value, use_llm: state.mode === 'stream_llm' }));
@@ -287,8 +427,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (typeof event.data !== 'string') {
                 if (firstAudio) {
                     firstAudio = false;
-                    const latency = ((performance.now() - state.startTime) / 1000).toFixed(2);
-                    setStatus(`Agent speaking… (first audio after ${latency}s)`);
+                    setStatus(`Speaking… first audio after ${elapsed()}s`, 'speaking');
                 }
                 if (player) player.push(event.data);
                 else fallbackChunks.push(event.data);
@@ -303,28 +442,36 @@ document.addEventListener('DOMContentLoaded', () => {
             if (msg.type === 'transcript') {
                 if (msg.speaker === 'user') {
                     addMessage(msg.text, 'user');
-                    setStatus('Thinking…');
+                    setStatus('Thinking…', 'busy');
+                    showTyping();
                 } else if (agentBubble) {
                     agentBubble.textContent = msg.text;
-                    chatScroll.scrollTop = chatScroll.scrollHeight;
+                    scrollToBottom();
                 } else {
                     agentBubble = addMessage(msg.text, 'ai');
                 }
             } else if (msg.type === 'audio_end') {
                 finished = true;
-                if (!player && fallbackChunks.length) playBlob(new Blob(fallbackChunks, { type: 'audio/wav' }));
-                const wait = player ? player.remaining() * 1000 : 0;
-                window.setTimeout(() => {
-                    if (state.ws === ws) setStatus('Ready');
-                }, wait);
+                const latency = elapsed();
+                const done = () => {
+                    if (state.ws === ws && !state.recording)
+                        setStatus(`Answered · first audio in ${latency}s`, 'success');
+                };
+                if (!player && fallbackChunks.length) {
+                    playBlob(new Blob(fallbackChunks, { type: 'audio/wav' }), done);
+                } else {
+                    window.setTimeout(done, player ? player.remaining() * 1000 : 0);
+                }
             } else if (msg.type === 'error') {
                 finished = true;
-                setStatus(msg.message || 'Something went wrong.', true);
+                removeTyping();
+                setStatus(msg.message || 'Something went wrong.', 'error');
             }
         });
 
         ws.addEventListener('error', () => {
-            setStatus('Connection error. Is the server running?', true);
+            removeTyping();
+            setStatus('Connection error. Is the server running?', 'error');
         });
 
         ws.addEventListener('close', () => {
@@ -332,8 +479,9 @@ document.addEventListener('DOMContentLoaded', () => {
             state.recording = false;
             updateRecordingUi(false);
             setBusy(false);
-            if (!finished && !statusEl.classList.contains('error') && statusEl.textContent !== 'Cancelled.') {
-                setStatus('Connection closed before a response was received.', true);
+            removeTyping();
+            if (!finished && !cancelled && state.status !== 'error') {
+                setStatus('The connection closed before a reply arrived. Please try again.', 'error');
             }
         });
     }
@@ -345,7 +493,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // An empty binary frame tells the server the utterance is complete.
             state.ws.send(new ArrayBuffer(0));
             setBusy(true);
-            setStatus('Transcribing…');
+            setStatus('Transcribing…', 'busy');
         }
     }
 
@@ -353,7 +501,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateRecordingUi(recording) {
         recordBtn.classList.toggle('recording', recording);
         recordBtn.setAttribute('aria-pressed', String(recording));
-        recordLabel.textContent = recording ? 'Listening… release to send' : 'Hold to speak';
+        const label = recording ? RECORDING_LABEL : IDLE_LABEL;
+        recordLabel.textContent = label;
+        recordBtn.setAttribute('aria-label', label);
         modeButtons.forEach((btn) => {
             btn.disabled = recording || state.busy;
         });
@@ -378,7 +528,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         state.startTime = performance.now();
         updateRecordingUi(true);
-        setStatus('Listening…');
+        setStatus('Listening…', 'listening');
 
         if (state.mode === 'batch') {
             state.chunks = [];

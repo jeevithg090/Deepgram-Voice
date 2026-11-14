@@ -2,108 +2,208 @@
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Voice AI Agent</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+        <title>Voice AI Agent · Talk to a real-time support assistant</title>
         <meta
             name="description"
             content="Talk to a real-time voice AI customer-support agent: Deepgram speech-to-text, retrieval-augmented answers and local Piper text-to-speech."
         />
-        <meta name="theme-color" content="#000000" />
-        <meta name="color-scheme" content="dark" />
+        <meta name="theme-color" content="#0a0a0a" />
+        <meta name="color-scheme" content="dark light" />
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="Voice AI Agent" />
+        <meta property="og:title" content="Voice AI Agent" />
+        <meta
+            property="og:description"
+            content="Hold a button, ask a question, hear the answer. Deepgram speech-to-text, RAG answers from OpenAI or Gemini, and local Piper text-to-speech."
+        />
+        <meta name="twitter:card" content="summary" />
         <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+        <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32" />
+        <link rel="apple-touch-icon" href="apple-touch-icon.png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet" />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+            rel="stylesheet"
+        />
         <link rel="stylesheet" href="style.css" />
+        <script src="theme.js"></script>
     </head>
     <body>
-        <div class="app-container">
-            <header class="app-header">
-                <h1>Voice AI Agent</h1>
-                <div class="settings">
-                    <div class="settings-row">
-                        <a class="link-btn" href="report.html">
-                            <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14">
-                                <path
-                                    fill="currentColor"
-                                    d="M3 3h2v16h16v2H3zm4 12 4-5 3 3 5-7 1.6 1.2-6.4 9-3-3-2.6 3.3z"
-                                />
-                            </svg>
-                            Benchmark
-                        </a>
-                        <div class="mode-toggle" role="group" aria-label="Processing mode">
+        <a class="skip-link" href="#record-btn">Skip to the microphone button</a>
+        <div class="app-shell">
+            <header class="topbar">
+                <a class="brand" href="./" aria-label="Voice AI Agent home">
+                    <span class="brand-mark" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="18" height="18">
+                            <path
+                                fill="currentColor"
+                                d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z"
+                            />
+                        </svg>
+                    </span>
+                    <span class="brand-text">
+                        <span class="brand-name">Voice AI Agent</span>
+                        <span class="brand-tagline">MockStore support demo</span>
+                    </span>
+                </a>
+                <div class="topbar-actions">
+                    <a class="btn btn-ghost btn-sm" href="report.html" aria-label="Model benchmark">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16">
+                            <path
+                                fill="currentColor"
+                                d="M3 3h2v16h16v2H3zm4 12 4-5 3 3 5-7 1.6 1.2-6.4 9-3-3-2.6 3.3z"
+                            />
+                        </svg>
+                        <span>Benchmark</span>
+                    </a>
+                    <button
+                        id="clear-btn"
+                        class="btn btn-ghost btn-sm"
+                        aria-label="Clear conversation"
+                        type="button"
+                        hidden
+                    >
+                        <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16">
+                            <path
+                                fill="currentColor"
+                                d="M9 3h6l1 2h4v2H4V5h4zm-3 6h12l-1 12H7zm3 2v8h2v-8zm4 0v8h2v-8z"
+                            />
+                        </svg>
+                        <span>Clear</span>
+                    </button>
+                    <button id="theme-toggle" class="btn btn-ghost btn-icon" type="button" aria-label="Switch theme">
+                        <svg class="icon-sun" aria-hidden="true" viewBox="0 0 24 24" width="18" height="18">
+                            <path
+                                fill="currentColor"
+                                d="M12 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM11 1h2v3h-2zm0 19h2v3h-2zM3.5 4.9l1.4-1.4L7 5.6 5.6 7zM17 18.4l1.4-1.4 2.1 2.1-1.4 1.4zM1 11h3v2H1zm19 0h3v2h-3zM5.6 17 7 18.4l-2.1 2.1-1.4-1.4zM18.4 5.6 17 7l2.1-2.1 1.4 1.4z"
+                            />
+                        </svg>
+                        <svg class="icon-moon" aria-hidden="true" viewBox="0 0 24 24" width="18" height="18">
+                            <path
+                                fill="currentColor"
+                                d="M10 7a7 7 0 0 0 12 4.9A10 10 0 1 1 12.1 2 7 7 0 0 0 10 7zm-6 5a8 8 0 0 0 15.5 2.8A9 9 0 0 1 9.2 4.5 8 8 0 0 0 4 12z"
+                            />
+                        </svg>
+                    </button>
+                </div>
+            </header>
+
+            <main class="app-main">
+                <h1 class="visually-hidden">Voice AI Agent</h1>
+                <section class="toolbar" aria-label="Conversation settings">
+                    <div class="field">
+                        <span class="field-label" id="mode-label">Mode</span>
+                        <div class="segmented" role="group" aria-labelledby="mode-label">
                             <button
                                 type="button"
-                                class="mode-btn active"
+                                class="segment active"
                                 data-mode="batch"
                                 aria-pressed="true"
-                                title="Record, then send the whole clip"
+                                aria-describedby="mode-description"
                             >
                                 Batch
                             </button>
                             <button
                                 type="button"
-                                class="mode-btn"
+                                class="segment"
                                 data-mode="stream"
                                 aria-pressed="false"
-                                title="Stream audio to Deepgram while you speak"
+                                aria-describedby="mode-description"
                             >
                                 Streaming
                             </button>
                             <button
                                 type="button"
-                                class="mode-btn"
+                                class="segment"
                                 data-mode="stream_llm"
                                 aria-pressed="false"
-                                title="Stream audio in and speak the LLM answer sentence by sentence"
+                                aria-describedby="mode-description"
                             >
                                 Streaming LLM
                             </button>
                         </div>
+                        <p id="mode-description" class="field-hint">
+                            Records your whole question, then sends it in one request.
+                        </p>
                     </div>
-                    <div class="settings-row">
-                        <label for="language-select">Language</label>
-                        <select id="language-select">
-                            <option value="auto">Auto-detect (batch only)</option>
-                            <option value="en" selected>English (en)</option>
-                            <option value="hi">Hindi (hi)</option>
-                            <option value="mr">Marathi (mr)</option>
-                            <option value="ta">Tamil (ta)</option>
-                            <option value="te">Telugu (te)</option>
-                            <option value="kn">Kannada (kn)</option>
-                            <option value="ml">Malayalam (ml)</option>
-                            <option value="gu">Gujarati (gu)</option>
-                            <option value="bn">Bengali (bn)</option>
-                            <option value="pa">Punjabi (pa)</option>
-                        </select>
-                    </div>
-                </div>
-            </header>
-
-            <main class="chat-interface" id="chat-scroll">
-                <div id="chat-box" class="chat-box" role="log" aria-live="polite" aria-label="Conversation">
-                    <div class="message ai-message">
-                        <div class="bubble">
-                            Hello! I'm the MockStore assistant. Ask me about shipping, returns, payments or orders.
+                    <div class="field field-language">
+                        <label class="field-label" for="language-select">Language</label>
+                        <div class="select-wrap">
+                            <select id="language-select" class="select">
+                                <option value="auto">Auto-detect (batch only)</option>
+                                <option value="en" selected>English</option>
+                                <option value="hi">Hindi · हिन्दी</option>
+                                <option value="mr">Marathi · मराठी</option>
+                                <option value="ta">Tamil · தமிழ்</option>
+                                <option value="te">Telugu · తెలుగు</option>
+                                <option value="kn">Kannada · ಕನ್ನಡ</option>
+                                <option value="ml">Malayalam · മലയാളം</option>
+                                <option value="gu">Gujarati · ગુજરાતી</option>
+                                <option value="bn">Bengali · বাংলা</option>
+                                <option value="pa">Punjabi · ਪੰਜਾਬੀ</option>
+                            </select>
                         </div>
                     </div>
-                </div>
+                </section>
+
+                <section class="conversation" aria-label="Conversation">
+                    <div id="chat-scroll" class="chat-scroll" tabindex="0" aria-label="Conversation history">
+                        <div id="notice" class="notice" role="status" hidden></div>
+                        <div id="chat-box" class="chat-box" role="log" aria-live="polite" aria-relevant="additions">
+                            <div id="empty-state" class="empty-state">
+                                <div class="empty-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="28" height="28">
+                                        <path
+                                            fill="currentColor"
+                                            d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm0 14H5.2L4 17.2V4h16zM7 9h10v2H7zm0-3h10v2H7zm0 6h7v2H7z"
+                                        />
+                                    </svg>
+                                </div>
+                                <h2 class="empty-title">Ask MockStore anything</h2>
+                                <p class="empty-text">
+                                    Hold the microphone button, ask a question out loud, then let go. The agent answers
+                                    from the store's FAQ and speaks the reply.
+                                </p>
+                                <ul class="suggestions" aria-label="Example questions">
+                                    <li>“How long does shipping take?”</li>
+                                    <li>“What is your return policy?”</li>
+                                    <li>“Which payment methods do you accept?”</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </section>
             </main>
 
-            <footer class="controls">
-                <button id="record-btn" class="record-btn" type="button" aria-describedby="record-hint">
-                    <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20">
-                        <path
-                            fill="currentColor"
-                            d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z"
-                        />
-                    </svg>
-                    <span class="record-label">Hold to speak</span>
-                </button>
-                <p id="record-hint" class="hint">
-                    Press and hold the button (or hold Space / Enter while it is focused), then release to send.
-                </p>
-                <div id="status" class="status-indicator" role="status" aria-live="polite">Ready</div>
+            <footer class="dock">
+                <div class="dock-center">
+                    <button
+                        id="record-btn"
+                        class="mic-btn"
+                        type="button"
+                        aria-label="Hold to speak"
+                        aria-describedby="record-hint"
+                    >
+                        <span class="mic-ring" aria-hidden="true"></span>
+                        <svg class="mic-icon" aria-hidden="true" viewBox="0 0 24 24" width="28" height="28">
+                            <path
+                                fill="currentColor"
+                                d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z"
+                            />
+                        </svg>
+                        <span class="spinner" aria-hidden="true"></span>
+                    </button>
+                    <p class="record-label" aria-hidden="true">Hold to speak</p>
+                    <div id="status" class="status-pill" data-state="idle" role="status" aria-live="polite">
+                        <span class="status-dot" aria-hidden="true"></span>
+                        <span class="status-text">Ready</span>
+                    </div>
+                    <p id="record-hint" class="hint">
+                        Press and hold (or hold <kbd>Space</kbd> while focused), then release to send.
+                    </p>
+                </div>
             </footer>
         </div>
         <script src="app.js" defer></script>
