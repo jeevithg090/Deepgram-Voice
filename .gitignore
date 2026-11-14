@@ -1,21 +1,31 @@
-# Environments
-venv/
+# Environment / secrets
 .env
+.env.*
+!.env.example
 
-# Python artifacts
+# Python
+venv/
+.venv/
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
 
-# Mac
+# Node (lint tooling)
+node_modules/
+
+# Editors / OS
 .DS_Store
+.idea/
+.vscode/
+*.swp
 
-# Large model files (optional, but typically you don't push 60MB files unless using LFS)
-# If you want to push the .onnx files, remove the next line.
-# *.onnx
-
-# Ignore output wav
-out.wav
-spacewalk.wav
-DeepGram.zip
+# Local artifacts
+*.wav
+*.zip
