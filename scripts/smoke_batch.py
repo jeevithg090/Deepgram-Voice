@@ -1,53 +1,53 @@
+"""Manual end-to-end check of the batch ``POST /chat`` endpoint.
+
+Requires a running server with ``DEEPGRAM_API_KEY`` configured.
+
+    python scripts/smoke_batch.py path/to/audio.wav [--url http://localhost:8000] [--language en]
+"""
+
+from __future__ import annotations
+
+import argparse
+import mimetypes
+import sys
 import time
-import requests
-import urllib.request
-import os
+from pathlib import Path
 
-# Download test audio file
-AUDIO_URL = "https://dpgr.am/spacewalk.wav"
-AUDIO_FILE = "spacewalk.wav"
-API_URL = "http://localhost:8000/chat"
+import httpx
 
-print("Downloading test audio...")
-urllib.request.urlretrieve(AUDIO_URL, AUDIO_FILE)
 
-def test_endpoint(language="en"):
-    print(f"\n--- Testing Latency with Language: {language} ---")
-    
-    with open(AUDIO_FILE, "rb") as f:
-        audio_data = f.read()
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("audio", type=Path, help="Audio file to send (wav, webm, mp3, ...)")
+    parser.add_argument("--url", default="http://localhost:8000")
+    parser.add_argument("--language", default="en")
+    parser.add_argument("--use-llm", action="store_true", help="Use OpenAI instead of Gemini")
+    parser.add_argument("--out", type=Path, default=Path("response.wav"))
+    args = parser.parse_args()
 
-    files = {
-        'audio': (AUDIO_FILE, audio_data, 'audio/wav')
-    }
-    data = {
-        'language': language
-    }
-    
-    print("Sending request to backend...")
-    start_time = time.time()
-    
-    response = requests.post(API_URL, files=files, data=data)
-    
-    end_time = time.time()
-    latency = end_time - start_time
-    
-    print(f"Total Latency: {latency:.2f} seconds")
-    print(f"Response Status: {response.status_code}")
-    
-    if response.status_code == 200:
-        # Try to parse hex transcript headers
-        user_hex = response.headers.get("X-User-Transcript", "")
-        agent_hex = response.headers.get("X-Agent-Transcript", "")
-        
-        user_text = bytes.fromhex(user_hex).decode('utf-8') if user_hex else "N/A"
-        agent_text = bytes.fromhex(agent_hex).decode('utf-8') if agent_hex else "N/A"
-        
-        print(f"Transcription (STT): {user_text}")
-        print(f"Agent Response (LLM mock): {agent_text}")
-        print(f"Audio Output Size: {len(response.content)} bytes")
-    else:
-        print(f"Error: {response.text}")
+    content_type = mimetypes.guess_type(args.audio.name)[0] or "application/octet-stream"
+    files = {"audio": (args.audio.name, args.audio.read_bytes(), content_type)}
+    data = {"language": args.language, "use_llm": str(args.use_llm).lower()}
+
+    start = time.perf_counter()
+    response = httpx.post(f"{args.url}/chat", files=files, data=data, timeout=120)
+    latency = time.perf_counter() - start
+
+    print(f"Status: {response.status_code}  latency: {latency:.2f}s")
+    if response.status_code != 200:
+        print(response.text)
+        return 1
+
+    def decode(name: str) -> str:
+        value = response.headers.get(name, "")
+        return bytes.fromhex(value).decode("utf-8") if value else "N/A"
+
+    print(f"User:  {decode('X-User-Transcript')}")
+    print(f"Agent: {decode('X-Agent-Transcript')}")
+    args.out.write_bytes(response.content)
+    print(f"Wrote {len(response.content)} bytes of audio to {args.out}")
+    return 0
+
 
 if __name__ == "__main__":
-    test_endpoint("en")
+    sys.exit(main())

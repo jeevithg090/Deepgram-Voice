@@ -1,53 +1,54 @@
-import requests
-import json
-import time
+"""Run the OpenAI model benchmark against a running server and print a ranked table.
 
+Uses ``OPENAI_API_KEY`` from the environment.
+
+    python scripts/run_benchmark.py [--url http://localhost:8000] [--models gpt-4o-mini gpt-4o]
+"""
+
+from __future__ import annotations
+
+import argparse
 import os
+import sys
 
-api_key = os.environ.get("OPENAI_API_KEY", "your-api-key-here")
-models = ["gpt-4o-mini", "gpt-3.5-turbo", "gpt-3.5-turbo-0125", "gpt-3.5-turbo-1106", "gpt-4o"]
-prompt = "Explain the history of artificial intelligence in 3 paragraphs."
+import httpx
 
-url = "http://127.0.0.1:8000/benchmark_stream"
+DEFAULT_MODELS = ["gpt-4o-mini", "gpt-3.5-turbo", "gpt-4o"]
+DEFAULT_PROMPT = "Explain the history of artificial intelligence in 3 paragraphs."
 
-payload = {
-    "api_key": api_key,
-    "models": models,
-    "prompt": prompt
-}
 
-print("Running benchmark...")
-response = requests.post(url, json=payload)
-results = response.json()
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--url", default="http://localhost:8000")
+    parser.add_argument("--models", nargs="+", default=DEFAULT_MODELS)
+    parser.add_argument("--prompt", default=DEFAULT_PROMPT)
+    args = parser.parse_args()
 
-print(json.dumps(results, indent=2))
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        print("Set OPENAI_API_KEY first.", file=sys.stderr)
+        return 1
 
-html_rows = ""
-for index, result in enumerate(results):
-    rank_class = ""
-    if index == 0:
-        rank_class = "rank-1"
-    elif index == 1:
-        rank_class = "rank-2"
-    elif index == 2:
-        rank_class = "rank-3"
-        
-    if result.get("error"):
-        html_rows += f'''
-        <tr>
-            <td>-</td>
-            <td>{result["model"]}</td>
-            <td colspan="3" style="color: #ff3333;">Error: {result["error"]}</td>
-        </tr>'''
-    else:
-        html_rows += f'''
-        <tr>
-            <td class="{rank_class}">#{index + 1}</td>
-            <td>{result["model"]}</td>
-            <td>{result["ttft"]:.3f}</td>
-            <td>{result["tps"]:.2f}</td>
-            <td>{result["total_time"]:.2f}</td>
-        </tr>'''
+    response = httpx.post(
+        f"{args.url}/benchmark_stream",
+        json={"api_key": api_key, "models": args.models, "prompt": args.prompt},
+        timeout=300,
+    )
+    if response.status_code != 200:
+        print(f"HTTP {response.status_code}: {response.text}", file=sys.stderr)
+        return 1
 
-print("\nHTML output to inject:")
-print(html_rows)
+    print(f"{'#':>3}  {'model':<24} {'TTFT (s)':>9} {'chunks/s':>9} {'total (s)':>10}")
+    for rank, row in enumerate(response.json(), start=1):
+        if row["error"]:
+            print(f"{'-':>3}  {row['model']:<24} error: {row['error']}")
+        else:
+            print(
+                f"{rank:>3}  {row['model']:<24} {row['ttft']:>9.3f} "
+                f"{row['tps']:>9.2f} {row['total_time']:>10.2f}"
+            )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
